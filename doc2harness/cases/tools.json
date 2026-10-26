@@ -1,0 +1,1065 @@
+{
+  "category": "tools",
+  "about": "Section 3: the seven tools, their result strings and their failures.",
+  "cases": [
+    {
+      "name": "read/plain",
+      "why": "a file's contents go back as the tool result, unchanged",
+      "files": {
+        "a.txt": "hello\nworld\n"
+      },
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "read_file",
+              "arguments": {
+                "path": "a.txt"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "stdout_has": [
+          "tool: read_file"
+        ],
+        "requests": [
+          {
+            "index": 1,
+            "messages": [
+              {
+                "at": 3,
+                "role": "tool",
+                "content": "hello\nworld\n"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "read/missing",
+      "why": "a missing file is a tool failure with a fixed message, not a crash",
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "read_file",
+              "arguments": {
+                "path": "nope.txt"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "request_count": 2,
+        "stdout_has": [
+          "error: no such file: nope.txt"
+        ],
+        "requests": [
+          {
+            "index": 1,
+            "messages": [
+              {
+                "at": 3,
+                "role": "tool",
+                "tool_call_id": "c1",
+                "content": "ERROR: no such file: nope.txt"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "read/directory",
+      "why": "reading a directory has its own message",
+      "files": {
+        "sub/x.txt": "x\n"
+      },
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "read_file",
+              "arguments": {
+                "path": "sub"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "stdout_has": [
+          "error: not a file: sub"
+        ],
+        "requests": [
+          {
+            "index": 1,
+            "messages": [
+              {
+                "at": 3,
+                "content": "ERROR: not a file: sub"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "write/creates_parents",
+      "why": "write_file creates missing directories and reports the byte count",
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "write_file",
+              "arguments": {
+                "path": "out/deep/a.txt",
+                "content": "hi\n"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "files": {
+          "out/deep/a.txt": "hi\n"
+        },
+        "requests": [
+          {
+            "index": 1,
+            "messages": [
+              {
+                "at": 3,
+                "content": "wrote 3 bytes to out/deep/a.txt"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "write/counts_utf8_bytes",
+      "why": "the reported count is bytes, not characters",
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "write_file",
+              "arguments": {
+                "path": "a.txt",
+                "content": "héllo"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "files": {
+          "a.txt": "héllo"
+        },
+        "requests": [
+          {
+            "index": 1,
+            "messages": [
+              {
+                "at": 3,
+                "content": "wrote 6 bytes to a.txt"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "write/truncates",
+      "why": "writing an existing file replaces it rather than appending",
+      "files": {
+        "a.txt": "a long old line\n"
+      },
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "write_file",
+              "arguments": {
+                "path": "a.txt",
+                "content": "new\n"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "files": {
+          "a.txt": "new\n"
+        }
+      }
+    },
+    {
+      "name": "edit/replaces_once",
+      "why": "a unique edit replaces exactly that text",
+      "files": {
+        "a.txt": "alpha beta gamma\n"
+      },
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "edit_file",
+              "arguments": {
+                "path": "a.txt",
+                "old": "beta",
+                "new": "delta"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "files": {
+          "a.txt": "alpha delta gamma\n"
+        },
+        "requests": [
+          {
+            "index": 1,
+            "messages": [
+              {
+                "at": 3,
+                "content": "replaced old with new in a.txt"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "edit/not_found",
+      "why": "an edit that matches nothing fails and leaves the file alone",
+      "files": {
+        "a.txt": "alpha\n"
+      },
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "edit_file",
+              "arguments": {
+                "path": "a.txt",
+                "old": "beta",
+                "new": "delta"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "files": {
+          "a.txt": "alpha\n"
+        },
+        "stdout_has": [
+          "error: old string not found in a.txt"
+        ],
+        "requests": [
+          {
+            "index": 1,
+            "messages": [
+              {
+                "at": 3,
+                "content": "ERROR: old string not found in a.txt"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "edit/not_unique",
+      "why": "an ambiguous edit fails, counts the matches, and changes nothing",
+      "files": {
+        "a.txt": "x\nx\nx\n"
+      },
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "edit_file",
+              "arguments": {
+                "path": "a.txt",
+                "old": "x",
+                "new": "y"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "files": {
+          "a.txt": "x\nx\nx\n"
+        },
+        "stdout_has": [
+          "error: old string is not unique in a.txt: 3 occurrences"
+        ],
+        "requests": [
+          {
+            "index": 1,
+            "messages": [
+              {
+                "at": 3,
+                "content": "ERROR: old string is not unique in a.txt: 3 occurrences"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "edit/missing_file",
+      "why": "editing a file that is not there reports the file, not the string",
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "edit_file",
+              "arguments": {
+                "path": "a.txt",
+                "old": "x",
+                "new": "y"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "files": {
+          "a.txt": null
+        },
+        "stdout_has": [
+          "error: no such file: a.txt"
+        ]
+      }
+    },
+    {
+      "name": "list/sorted_with_slashes",
+      "why": "entries are sorted and directories are marked",
+      "files": {
+        "b.txt": "",
+        "a.txt": "",
+        "sub/c.txt": ""
+      },
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "list_dir",
+              "arguments": {
+                "path": "."
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "requests": [
+          {
+            "index": 1,
+            "messages": [
+              {
+                "at": 3,
+                "content": "a.txt\nb.txt\nsub/"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "list/missing",
+      "why": "listing a directory that is not there has its own message",
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "list_dir",
+              "arguments": {
+                "path": "nope"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "stdout_has": [
+          "error: no such directory: nope"
+        ]
+      }
+    },
+    {
+      "name": "list/on_a_file",
+      "why": "listing a file is a different failure from listing nothing",
+      "files": {
+        "a.txt": "x\n"
+      },
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "list_dir",
+              "arguments": {
+                "path": "a.txt"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "stdout_has": [
+          "error: not a directory: a.txt"
+        ]
+      }
+    },
+    {
+      "name": "todo/writes_the_file",
+      "why": "the todo list is persisted exactly as specified, and counted",
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "todo_write",
+              "arguments": {
+                "items": [
+                  {
+                    "text": "one",
+                    "done": false
+                  },
+                  {
+                    "text": "two",
+                    "done": true
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "files": {
+          ".harness/todo.json": "[\n  {\n    \"text\": \"one\",\n    \"done\": false\n  },\n  {\n    \"text\": \"two\",\n    \"done\": true\n  }\n]\n"
+        },
+        "requests": [
+          {
+            "index": 1,
+            "messages": [
+              {
+                "at": 3,
+                "content": "todo: 2 items (1 done)"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "todo/bad_item",
+      "why": "a malformed item fails the call and writes nothing",
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "todo_write",
+              "arguments": {
+                "items": [
+                  {
+                    "text": "one"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "files": {
+          ".harness/todo.json": null
+        },
+        "stdout_has": [
+          "error: bad argument: items"
+        ]
+      }
+    },
+    {
+      "name": "todo/not_an_array",
+      "why": "items must be an array",
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "todo_write",
+              "arguments": {
+                "items": "one, two"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "stdout_has": [
+          "error: bad argument: items"
+        ]
+      }
+    },
+    {
+      "name": "todo/no_state_directory_otherwise",
+      "why": "the harness keeps no state in the workspace unless todo_write is called",
+      "files": {
+        "a.txt": "hello\n"
+      },
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "read_file",
+              "arguments": {
+                "path": "a.txt"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "only_files": [
+          "a.txt"
+        ],
+        "stdout_has": [
+          "tool: read_file",
+          "done: ok"
+        ],
+        "requests": [
+          {
+            "index": 1,
+            "messages": [
+              {
+                "at": 3,
+                "role": "tool",
+                "content": "hello\n"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "args/unknown_tool",
+      "why": "an invented tool name is reported and the run goes on",
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "grep_files",
+              "arguments": {
+                "pattern": "x"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "stdout_has": [
+          "tool: grep_files",
+          "error: unknown tool: grep_files"
+        ],
+        "requests": [
+          {
+            "index": 1,
+            "messages": [
+              {
+                "at": 3,
+                "content": "ERROR: unknown tool: grep_files"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "args/missing_argument",
+      "why": "a required argument that is absent names itself",
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "read_file",
+              "arguments": {}
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "stdout_has": [
+          "error: missing argument: path"
+        ],
+        "requests": [
+          {
+            "index": 1,
+            "messages": [
+              {
+                "at": 3,
+                "content": "ERROR: missing argument: path"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "args/wrong_type",
+      "why": "an argument of the wrong JSON type is a different failure from a missing one",
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "read_file",
+              "arguments": {
+                "path": 7
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "stdout_has": [
+          "error: bad argument: path"
+        ]
+      }
+    },
+    {
+      "name": "args/missing_second_argument",
+      "why": "argument checks follow the documented order",
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "edit_file",
+              "arguments": {
+                "path": "a.txt",
+                "new": "y"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "stdout_has": [
+          "error: missing argument: old"
+        ]
+      }
+    },
+    {
+      "name": "args/bad_finish_argument",
+      "why": "a malformed finish is an ordinary tool failure: the run continues",
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "finish",
+              "arguments": {
+                "success": "yes",
+                "summary": "ok"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "really done"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "request_count": 2,
+        "stdout_has": [
+          "error: bad argument: success",
+          "done: really done"
+        ]
+      }
+    },
+    {
+      "name": "args/failure_does_not_end_the_run",
+      "why": "three failing calls in a row still leave the loop running",
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "read_file",
+              "arguments": {
+                "path": "nope.txt"
+              }
+            },
+            {
+              "id": "c2",
+              "name": "list_dir",
+              "arguments": {
+                "path": "nope"
+              }
+            },
+            {
+              "id": "c3",
+              "name": "edit_file",
+              "arguments": {
+                "path": "nope.txt",
+                "old": "a",
+                "new": "b"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "request_count": 2,
+        "requests": [
+          {
+            "index": 1,
+            "message_count": 6,
+            "messages": [
+              {
+                "at": 3,
+                "tool_call_id": "c1",
+                "content": "ERROR: no such file: nope.txt"
+              },
+              {
+                "at": 4,
+                "tool_call_id": "c2",
+                "content": "ERROR: no such directory: nope"
+              },
+              {
+                "at": 5,
+                "tool_call_id": "c3",
+                "content": "ERROR: no such file: nope.txt"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

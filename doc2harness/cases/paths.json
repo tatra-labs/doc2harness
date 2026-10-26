@@ -1,0 +1,86 @@
+{
+  "category": "paths",
+  "about": "Section 3.1: every path argument stays inside the workspace.",
+  "cases": [
+    {
+      "name": "paths/absolute_read",
+      "why": "an absolute path is refused before anything is read",
+      "script": [
+        {"tool_calls": [{"id": "c1", "name": "read_file", "arguments": {"path": "/etc/passwd"}}]},
+        {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}
+      ],
+      "expect": {
+        "exit_code": 0,
+        "stdout_has": ["error: path outside workdir: /etc/passwd"],
+        "requests": [{"index": 1, "messages": [{"at": 3, "content": "ERROR: path outside workdir: /etc/passwd"}]}]
+      }
+    },
+    {
+      "name": "paths/parent_write",
+      "why": "a write above the workspace is refused and nothing lands there",
+      "script": [
+        {"tool_calls": [{"id": "c1", "name": "write_file", "arguments": {"path": "../escaped.txt", "content": "out"}}]},
+        {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}
+      ],
+      "expect": {
+        "exit_code": 0,
+        "outside_clean": true,
+        "stdout_has": ["error: path outside workdir: ../escaped.txt"]
+      }
+    },
+    {
+      "name": "paths/deep_parent_read",
+      "why": "a path that climbs out after descending is still out",
+      "script": [
+        {"tool_calls": [{"id": "c1", "name": "read_file", "arguments": {"path": "sub/../../secret.txt"}}]},
+        {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}
+      ],
+      "expect": {"exit_code": 0, "stdout_has": ["error: path outside workdir: sub/../../secret.txt"]}
+    },
+    {
+      "name": "paths/inner_dotdot_is_fine",
+      "why": "containment is about where the path lands, not whether it contains ..",
+      "files": {"a.txt": "inside\n", "sub/b.txt": "b\n"},
+      "script": [
+        {"tool_calls": [{"id": "c1", "name": "read_file", "arguments": {"path": "sub/../a.txt"}}]},
+        {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}
+      ],
+      "expect": {
+        "exit_code": 0,
+        "stdout_lacks": ["error: path outside workdir: sub/../a.txt"],
+        "requests": [{"index": 1, "messages": [{"at": 3, "content": "inside\n"}]}]
+      }
+    },
+    {
+      "name": "paths/edit_outside",
+      "why": "containment is checked by edit_file too, not only by read and write",
+      "script": [
+        {"tool_calls": [{"id": "c1", "name": "edit_file", "arguments": {"path": "../a.txt", "old": "x", "new": "y"}}]},
+        {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}
+      ],
+      "expect": {"exit_code": 0, "stdout_has": ["error: path outside workdir: ../a.txt"]}
+    },
+    {
+      "name": "paths/list_outside",
+      "why": "containment is checked by list_dir too",
+      "script": [
+        {"tool_calls": [{"id": "c1", "name": "list_dir", "arguments": {"path": ".."}}]},
+        {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}
+      ],
+      "expect": {"exit_code": 0, "stdout_has": ["error: path outside workdir: .."]}
+    },
+    {
+      "name": "paths/workspace_root_is_inside",
+      "why": "the workspace itself is not outside the workspace",
+      "files": {"a.txt": "x\n"},
+      "script": [
+        {"tool_calls": [{"id": "c1", "name": "list_dir", "arguments": {"path": "."}}]},
+        {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}
+      ],
+      "expect": {
+        "exit_code": 0,
+        "requests": [{"index": 1, "messages": [{"at": 3, "content": "a.txt"}]}]
+      }
+    }
+  ]
+}

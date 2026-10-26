@@ -1,0 +1,469 @@
+{
+  "category": "transcript",
+  "about": "Section 6: the JSON-lines transcript written when --log is given.",
+  "cases": [
+    {
+      "name": "log/full_sequence",
+      "why": "every event of a two-turn run, in order, and nothing else",
+      "files": {
+        "a.txt": "hello\n"
+      },
+      "extra": [
+        "--log",
+        "{log}"
+      ],
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "read_file",
+              "arguments": {
+                "path": "a.txt"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "log": [
+          {
+            "event": "request",
+            "turn": 1,
+            "messages": 2
+          },
+          {
+            "event": "response",
+            "turn": 1,
+            "tool_calls": 1
+          },
+          {
+            "event": "tool",
+            "turn": 1,
+            "name": "read_file",
+            "ok": true
+          },
+          {
+            "event": "request",
+            "turn": 2,
+            "messages": 4
+          },
+          {
+            "event": "response",
+            "turn": 2,
+            "tool_calls": 1
+          },
+          {
+            "event": "end",
+            "reason": "finish",
+            "exit": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "log/keys_per_event",
+      "why": "each event type carries exactly its documented keys, in order",
+      "files": {
+        "a.txt": "hello\n"
+      },
+      "extra": [
+        "--log",
+        "{log}"
+      ],
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "read_file",
+              "arguments": {
+                "path": "a.txt"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "log_keys": {
+          "request": [
+            "event",
+            "turn",
+            "messages"
+          ],
+          "response": [
+            "event",
+            "turn",
+            "tool_calls"
+          ],
+          "tool": [
+            "event",
+            "turn",
+            "name",
+            "ok"
+          ],
+          "end": [
+            "event",
+            "reason",
+            "exit"
+          ]
+        }
+      }
+    },
+    {
+      "name": "log/failed_tool_is_not_ok",
+      "why": "a tool failure is recorded as a tool event with ok false",
+      "extra": [
+        "--log",
+        "{log}"
+      ],
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "read_file",
+              "arguments": {
+                "path": "nope.txt"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "log_has": [
+          {
+            "event": "tool",
+            "turn": 1,
+            "name": "read_file",
+            "ok": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "log/one_request_event_per_turn",
+      "why": "a retried attempt is not a second request event",
+      "extra": [
+        "--log",
+        "{log}"
+      ],
+      "script": [
+        {
+          "status": 500
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "log": [
+          {
+            "event": "request",
+            "turn": 1,
+            "messages": 2
+          },
+          {
+            "event": "response",
+            "turn": 1,
+            "tool_calls": 1
+          },
+          {
+            "event": "end",
+            "reason": "finish",
+            "exit": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "log/usage_error_still_ends",
+      "why": "a usage error is logged too, which means --log is read before the rest is validated",
+      "argv": [
+        "--prompt",
+        "hi",
+        "--model-url",
+        "{model_url}",
+        "--log",
+        "{log}"
+      ],
+      "script": [],
+      "expect": {
+        "exit_code": 2,
+        "log": [
+          {
+            "event": "end",
+            "reason": "usage",
+            "exit": 2
+          }
+        ]
+      }
+    },
+    {
+      "name": "log/transport_failure",
+      "why": "a request that never got a response has no response event",
+      "extra": [
+        "--log",
+        "{log}"
+      ],
+      "script": [
+        {
+          "status": 400
+        }
+      ],
+      "expect": {
+        "exit_code": 3,
+        "log": [
+          {
+            "event": "request",
+            "turn": 1,
+            "messages": 2
+          },
+          {
+            "event": "end",
+            "reason": "model_error",
+            "exit": 3
+          }
+        ]
+      }
+    },
+    {
+      "name": "log/turn_cap",
+      "why": "the end reason names the turn cap",
+      "files": {
+        "a.txt": "hello\n"
+      },
+      "extra": [
+        "--log",
+        "{log}",
+        "--max-turns",
+        "1"
+      ],
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "read_file",
+              "arguments": {
+                "path": "a.txt"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 1,
+        "log": [
+          {
+            "event": "request",
+            "turn": 1,
+            "messages": 2
+          },
+          {
+            "event": "response",
+            "turn": 1,
+            "tool_calls": 1
+          },
+          {
+            "event": "tool",
+            "turn": 1,
+            "name": "read_file",
+            "ok": true
+          },
+          {
+            "event": "end",
+            "reason": "max_turns",
+            "exit": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "log/text_end_reason",
+      "why": "ending on a text-only response has its own reason",
+      "extra": [
+        "--log",
+        "{log}"
+      ],
+      "script": [
+        {
+          "content": "nothing to do"
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "log": [
+          {
+            "event": "request",
+            "turn": 1,
+            "messages": 2
+          },
+          {
+            "event": "response",
+            "turn": 1,
+            "tool_calls": 0
+          },
+          {
+            "event": "end",
+            "reason": "text",
+            "exit": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "log/not_written_without_the_flag",
+      "why": "no transcript appears when --log was not given",
+      "files": {
+        "a.txt": "hello\n"
+      },
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "read_file",
+              "arguments": {
+                "path": "a.txt"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "no_log": true,
+        "only_files": [
+          "a.txt"
+        ],
+        "stdout_has": [
+          "tool: read_file",
+          "done: ok"
+        ]
+      }
+    },
+    {
+      "name": "log/two_tool_events",
+      "why": "one event per call, in call order",
+      "files": {
+        "a.txt": "hello\n"
+      },
+      "extra": [
+        "--log",
+        "{log}"
+      ],
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "read_file",
+              "arguments": {
+                "path": "a.txt"
+              }
+            },
+            {
+              "id": "c2",
+              "name": "write_file",
+              "arguments": {
+                "path": "b.txt",
+                "content": "x"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "log_order": [
+          {
+            "event": "tool",
+            "turn": 1,
+            "name": "read_file",
+            "ok": true
+          },
+          {
+            "event": "tool",
+            "turn": 1,
+            "name": "write_file",
+            "ok": true
+          }
+        ]
+      }
+    }
+  ]
+}

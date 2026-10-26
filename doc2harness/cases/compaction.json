@@ -1,0 +1,325 @@
+{
+  "category": "compaction",
+  "about": "Section 4: dropping old messages when the conversation outgrows its budget.",
+  "cases": [
+    {
+      "name": "compact/not_until_five_messages",
+      "why": "with a zero budget nothing is dropped while four or fewer messages follow the system one",
+      "files": {
+        "a.txt": "hello\n"
+      },
+      "extra": [
+        "--context-limit",
+        "0",
+        "--max-turns",
+        "5"
+      ],
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "read_file",
+              "arguments": {
+                "path": "a.txt"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "c2",
+              "name": "read_file",
+              "arguments": {
+                "path": "a.txt"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "c3",
+              "name": "read_file",
+              "arguments": {
+                "path": "a.txt"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "request_count": 4,
+        "stdout": [
+          "tool: read_file",
+          "tool: read_file",
+          "compact: dropped 1 messages",
+          "tool: read_file",
+          "compact: dropped 3 messages",
+          "tool: finish",
+          "done: ok",
+          "tokens: prompt=0 completion=0"
+        ],
+        "requests": [
+          {
+            "index": 1,
+            "message_count": 4
+          },
+          {
+            "index": 2,
+            "message_count": 6,
+            "messages": [
+              {
+                "at": 1,
+                "role": "user",
+                "content": "[compacted: dropped 1 messages]"
+              },
+              {
+                "at": 2,
+                "role": "assistant"
+              }
+            ]
+          },
+          {
+            "index": 3,
+            "message_count": 6,
+            "messages": [
+              {
+                "at": 1,
+                "role": "user",
+                "content": "[compacted: dropped 3 messages]"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "compact/never_leaves_a_tool_message_first",
+      "why": "when the oldest survivor is a tool result it goes too, and is counted",
+      "files": {
+        "a.txt": "hello\n"
+      },
+      "extra": [
+        "--context-limit",
+        "0",
+        "--max-turns",
+        "5"
+      ],
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "read_file",
+              "arguments": {
+                "path": "a.txt"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "c2",
+              "name": "read_file",
+              "arguments": {
+                "path": "a.txt"
+              }
+            },
+            {
+              "id": "c3",
+              "name": "read_file",
+              "arguments": {
+                "path": "a.txt"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "request_count": 3,
+        "stdout": [
+          "tool: read_file",
+          "tool: read_file",
+          "tool: read_file",
+          "compact: dropped 3 messages",
+          "tool: finish",
+          "done: ok",
+          "tokens: prompt=0 completion=0"
+        ],
+        "requests": [
+          {
+            "index": 2,
+            "message_count": 5,
+            "messages": [
+              {
+                "at": 1,
+                "role": "user",
+                "content": "[compacted: dropped 3 messages]"
+              },
+              {
+                "at": 2,
+                "role": "assistant"
+              },
+              {
+                "at": 3,
+                "role": "tool"
+              },
+              {
+                "at": 4,
+                "role": "tool"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "compact/not_before_the_first_request",
+      "why": "the first request is sent as it is, however long the prompt",
+      "prompt": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "extra": [
+        "--context-limit",
+        "0"
+      ],
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "stdout": [
+          "tool: finish",
+          "done: ok",
+          "tokens: prompt=0 completion=0"
+        ],
+        "requests": [
+          {
+            "index": 0,
+            "message_count": 2,
+            "messages": [
+              {
+                "at": 1,
+                "role": "user",
+                "content": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "compact/room_to_spare",
+      "why": "a conversation inside its budget is never touched",
+      "files": {
+        "a.txt": "hello\n"
+      },
+      "extra": [
+        "--max-turns",
+        "6"
+      ],
+      "script": [
+        {
+          "tool_calls": [
+            {
+              "id": "c1",
+              "name": "read_file",
+              "arguments": {
+                "path": "a.txt"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "c2",
+              "name": "read_file",
+              "arguments": {
+                "path": "a.txt"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "c3",
+              "name": "read_file",
+              "arguments": {
+                "path": "a.txt"
+              }
+            }
+          ]
+        },
+        {
+          "tool_calls": [
+            {
+              "id": "f",
+              "name": "finish",
+              "arguments": {
+                "success": true,
+                "summary": "ok"
+              }
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "exit_code": 0,
+        "stdout": [
+          "tool: read_file",
+          "tool: read_file",
+          "tool: read_file",
+          "tool: finish",
+          "done: ok",
+          "tokens: prompt=0 completion=0"
+        ],
+        "requests": [
+          {
+            "index": 3,
+            "message_count": 8
+          }
+        ]
+      }
+    }
+  ]
+}

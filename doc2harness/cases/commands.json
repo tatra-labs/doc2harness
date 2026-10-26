@@ -1,0 +1,109 @@
+{
+  "category": "commands",
+  "about": "Section 3.6: running commands, and the deny list.",
+  "cases": [
+    {
+      "name": "command/output",
+      "why": "the exit status and the output both come back",
+      "script": [
+        {"tool_calls": [{"id": "c1", "name": "run_command", "arguments": {"command": "echo hello"}}]},
+        {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}
+      ],
+      "expect": {
+        "exit_code": 0,
+        "stdout_has": ["tool: run_command"],
+        "requests": [{"index": 1, "messages": [{"at": 3, "role": "tool", "content_has": ["exit=0", "hello"]}]}]
+      }
+    },
+    {
+      "name": "command/exit_status",
+      "why": "a non-zero status is reported rather than raised",
+      "script": [
+        {"tool_calls": [{"id": "c1", "name": "run_command", "arguments": {"command": "exit 7"}}]},
+        {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}
+      ],
+      "expect": {
+        "exit_code": 0,
+        "requests": [{"index": 1, "messages": [{"at": 3, "content_has": ["exit=7"]}]}]
+      }
+    },
+    {
+      "name": "command/runs_in_the_workspace",
+      "why": "commands run with the workspace as their working directory",
+      "script": [
+        {"tool_calls": [{"id": "c1", "name": "run_command", "arguments": {"command": "echo made > made.txt"}}]},
+        {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}
+      ],
+      "expect": {"exit_code": 0, "file_has": {"made.txt": ["made"]}}
+    },
+    {
+      "name": "deny/rm",
+      "why": "rm is refused before it runs and the file survives",
+      "files": {"a.txt": "keep\n"},
+      "script": [
+        {"tool_calls": [{"id": "c1", "name": "run_command", "arguments": {"command": "rm a.txt"}}]},
+        {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}
+      ],
+      "expect": {
+        "exit_code": 0,
+        "files": {"a.txt": "keep\n"},
+        "stdout_has": ["error: command denied: rm a.txt"],
+        "requests": [{"index": 1, "messages": [{"at": 3, "content": "ERROR: command denied: rm a.txt"}]}]
+      }
+    },
+    {
+      "name": "deny/sudo",
+      "why": "the deny list is more than one entry",
+      "script": [
+        {"tool_calls": [{"id": "c1", "name": "run_command", "arguments": {"command": "sudo echo hi"}}]},
+        {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}
+      ],
+      "expect": {"exit_code": 0, "stdout_has": ["error: command denied: sudo echo hi"]}
+    },
+    {
+      "name": "deny/rm_rf_anywhere",
+      "why": "rm -rf is refused wherever it appears, not only at the front",
+      "script": [
+        {"tool_calls": [{"id": "c1", "name": "run_command", "arguments": {"command": "echo x; rm -rf ."}}]},
+        {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}
+      ],
+      "expect": {"exit_code": 0, "stdout_has": ["error: command denied: echo x; rm -rf ."]}
+    },
+    {
+      "name": "deny/leading_whitespace",
+      "why": "indenting a denied command does not get it past the check, and the message keeps the original text",
+      "files": {"a.txt": "keep\n"},
+      "script": [
+        {"tool_calls": [{"id": "c1", "name": "run_command", "arguments": {"command": "   rm a.txt"}}]},
+        {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}
+      ],
+      "expect": {
+        "exit_code": 0,
+        "files": {"a.txt": "keep\n"},
+        "stdout_has": ["error: command denied:    rm a.txt"]
+      }
+    },
+    {
+      "name": "deny/only_the_first_token",
+      "why": "a denied word that is not the command being run is allowed",
+      "script": [
+        {"tool_calls": [{"id": "c1", "name": "run_command", "arguments": {"command": "echo rm and dd"}}]},
+        {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}
+      ],
+      "expect": {
+        "exit_code": 0,
+        "stdout_lacks": ["error: command denied: echo rm and dd"],
+        "requests": [{"index": 1, "messages": [{"at": 3, "content_has": ["exit=0", "rm and dd"]}]}]
+      }
+    },
+    {
+      "name": "deny/missing_command_argument",
+      "why": "run_command still checks its arguments",
+      "script": [
+        {"tool_calls": [{"id": "c1", "name": "run_command", "arguments": {"cmd": "echo hi"}}]},
+        {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}
+      ],
+      "expect": {"exit_code": 0, "stdout_has": ["error: missing argument: command"]}
+    }
+  ]
+}

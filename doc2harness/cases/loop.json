@@ -1,0 +1,129 @@
+{
+  "category": "loop",
+  "about": "Sections 2.4 and 2.5: output order, how the loop ends, and the turn cap.",
+  "cases": [
+    {
+      "name": "end/text_only",
+      "why": "a response with no tool calls ends the run successfully",
+      "script": [{"content": "nothing to do"}],
+      "expect": {
+        "exit_code": 0,
+        "request_count": 1,
+        "stdout": ["assistant: nothing to do", "done: nothing to do", "tokens: prompt=0 completion=0"]
+      }
+    },
+    {
+      "name": "end/empty_response",
+      "why": "an empty response still ends the run, with an empty summary",
+      "script": [{}],
+      "expect": {
+        "exit_code": 0,
+        "request_count": 1,
+        "stdout": ["done: ", "tokens: prompt=0 completion=0"]
+      }
+    },
+    {
+      "name": "end/empty_tool_call_list",
+      "why": "an empty tool_calls array means no tool calls",
+      "script": [{"content": "bye", "tool_calls": []}],
+      "expect": {"exit_code": 0, "request_count": 1, "stdout_has": ["done: bye"]}
+    },
+    {
+      "name": "end/finish_success",
+      "why": "finish with success true exits zero and prints the summary",
+      "script": [{"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "added the test"}}]}],
+      "expect": {
+        "exit_code": 0,
+        "stdout": ["tool: finish", "done: added the test", "tokens: prompt=0 completion=0"]
+      }
+    },
+    {
+      "name": "end/finish_failure",
+      "why": "finish with success false is a task failure, not a crash",
+      "script": [{"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": false, "summary": "cannot be done"}}]}],
+      "expect": {
+        "exit_code": 1,
+        "stdout": ["tool: finish", "done: cannot be done", "tokens: prompt=0 completion=0"]
+      }
+    },
+    {
+      "name": "end/finish_stops_the_rest",
+      "why": "tool calls after finish in the same response are not executed",
+      "script": [{"tool_calls": [
+        {"id": "f", "name": "finish", "arguments": {"success": true, "summary": "stop here"}},
+        {"id": "c2", "name": "write_file", "arguments": {"path": "b.txt", "content": "late"}}
+      ]}],
+      "expect": {
+        "exit_code": 0,
+        "request_count": 1,
+        "files": {"b.txt": null},
+        "stdout_lacks": ["tool: write_file"]
+      }
+    },
+    {
+      "name": "order/text_then_tools",
+      "why": "assistant text is printed before the tool calls of the same response",
+      "files": {"a.txt": "hello\n"},
+      "script": [
+        {"content": "looking", "tool_calls": [{"id": "c1", "name": "read_file", "arguments": {"path": "a.txt"}}]},
+        {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}
+      ],
+      "expect": {
+        "exit_code": 0,
+        "stdout": ["assistant: looking", "tool: read_file", "tool: finish", "done: ok", "tokens: prompt=0 completion=0"]
+      }
+    },
+    {
+      "name": "order/one_line_per_call",
+      "why": "every call is announced, failures included, in call order",
+      "files": {"a.txt": "hello\n"},
+      "script": [
+        {"tool_calls": [
+          {"id": "c1", "name": "read_file", "arguments": {"path": "a.txt"}},
+          {"id": "c2", "name": "read_file", "arguments": {"path": "nope.txt"}}
+        ]},
+        {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}
+      ],
+      "expect": {
+        "exit_code": 0,
+        "stdout": ["tool: read_file", "tool: read_file", "error: no such file: nope.txt", "tool: finish", "done: ok", "tokens: prompt=0 completion=0"]
+      }
+    },
+    {
+      "name": "turns/cap_reached",
+      "why": "the turn cap stops the loop and is a task failure",
+      "files": {"a.txt": "hello\n"},
+      "extra": ["--max-turns", "2"],
+      "script": [
+        {"tool_calls": [{"id": "c1", "name": "read_file", "arguments": {"path": "a.txt"}}]},
+        {"tool_calls": [{"id": "c2", "name": "read_file", "arguments": {"path": "a.txt"}}]},
+        {"tool_calls": [{"id": "c3", "name": "read_file", "arguments": {"path": "a.txt"}}]}
+      ],
+      "expect": {
+        "exit_code": 1,
+        "request_count": 2,
+        "stderr_has": ["max turns exceeded"],
+        "stdout_last": "tokens: prompt=0 completion=0"
+      }
+    },
+    {
+      "name": "turns/zero",
+      "why": "a cap of zero sends nothing at all",
+      "extra": ["--max-turns", "0"],
+      "script": [{"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}],
+      "expect": {
+        "exit_code": 1,
+        "request_count": 0,
+        "stderr_has": ["max turns exceeded"],
+        "stdout": ["tokens: prompt=0 completion=0"]
+      }
+    },
+    {
+      "name": "turns/cap_not_reached",
+      "why": "a run that finishes early does not report the cap",
+      "extra": ["--max-turns", "9"],
+      "script": [{"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}],
+      "expect": {"exit_code": 0, "request_count": 1, "stderr_lacks": ["max turns exceeded"]}
+    }
+  ]
+}

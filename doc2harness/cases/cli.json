@@ -1,0 +1,101 @@
+{
+  "category": "cli",
+  "about": "Section 1: arguments and usage errors.",
+  "cases": [
+    {
+      "name": "usage/no_workdir",
+      "why": "--workdir is required and nothing may be sent without it",
+      "argv": ["--prompt", "hi", "--model-url", "{model_url}"],
+      "script": [],
+      "expect": {"exit_code": 2, "stderr_has": ["usage: "], "request_count": 0, "stdout": []}
+    },
+    {
+      "name": "usage/no_model_url",
+      "why": "--model-url is required",
+      "argv": ["--prompt", "hi", "--workdir", "{workdir}"],
+      "script": [],
+      "expect": {"exit_code": 2, "stderr_has": ["usage: "], "request_count": 0}
+    },
+    {
+      "name": "usage/no_prompt",
+      "why": "one of --prompt and --prompt-file is required",
+      "argv": ["--workdir", "{workdir}", "--model-url", "{model_url}"],
+      "script": [],
+      "expect": {"exit_code": 2, "stderr_has": ["usage: "], "request_count": 0}
+    },
+    {
+      "name": "usage/both_prompts",
+      "why": "--prompt and --prompt-file are mutually exclusive",
+      "argv": ["--prompt", "hi", "--prompt-file", "{prompt_file}", "--workdir", "{workdir}", "--model-url", "{model_url}"],
+      "script": [],
+      "expect": {"exit_code": 2, "stderr_has": ["usage: "], "request_count": 0}
+    },
+    {
+      "name": "usage/unknown_flag",
+      "why": "an unknown flag is a usage error, not something to ignore",
+      "extra": ["--turbo", "1"],
+      "script": [],
+      "expect": {"exit_code": 2, "stderr_has": ["usage: "], "request_count": 0}
+    },
+    {
+      "name": "usage/flag_without_value",
+      "why": "a value flag at the end of argv has no value",
+      "argv": ["--prompt", "hi", "--workdir", "{workdir}", "--model-url", "{model_url}", "--max-turns"],
+      "script": [],
+      "expect": {"exit_code": 2, "stderr_has": ["usage: "], "request_count": 0}
+    },
+    {
+      "name": "usage/non_integer",
+      "why": "--max-turns must be a non-negative integer",
+      "extra": ["--max-turns", "many"],
+      "script": [],
+      "expect": {"exit_code": 2, "stderr_has": ["usage: "], "request_count": 0}
+    },
+    {
+      "name": "usage/negative_integer",
+      "why": "a negative --retries is not a non-negative integer",
+      "extra": ["--retries", "-2"],
+      "script": [],
+      "expect": {"exit_code": 2, "stderr_has": ["usage: "], "request_count": 0}
+    },
+    {
+      "name": "usage/missing_workdir_directory",
+      "why": "--workdir must already exist",
+      "argv": ["--prompt", "hi", "--workdir", "{workdir}/nope", "--model-url", "{model_url}"],
+      "script": [],
+      "expect": {"exit_code": 2, "stderr_has": ["usage: "], "request_count": 0}
+    },
+    {
+      "name": "usage/missing_prompt_file",
+      "why": "--prompt-file must name a file that exists",
+      "argv": ["--prompt-file", "{workdir}/nope.txt", "--workdir", "{workdir}", "--model-url", "{model_url}"],
+      "script": [],
+      "expect": {"exit_code": 2, "stderr_has": ["usage: "], "request_count": 0}
+    },
+    {
+      "name": "args/prompt_file",
+      "why": "the prompt can come from a file and reaches the model unchanged",
+      "prompt": "read the file instead",
+      "argv": ["--prompt-file", "{prompt_file}", "--workdir", "{workdir}", "--model-url", "{model_url}"],
+      "script": [{"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}],
+      "expect": {
+        "exit_code": 0,
+        "requests": [{"index": 0, "messages": [{"at": 1, "role": "user", "content": "read the file instead"}]}]
+      }
+    },
+    {
+      "name": "args/model_name",
+      "why": "--model-name is what goes in the body's model field",
+      "extra": ["--model-name", "alpha-9"],
+      "script": [{"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}],
+      "expect": {"exit_code": 0, "requests": [{"index": 0, "field": {"model": "alpha-9"}}]}
+    },
+    {
+      "name": "args/max_turns_in_body",
+      "why": "--max-turns is reported to the model, not just enforced",
+      "extra": ["--max-turns", "4"],
+      "script": [{"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}],
+      "expect": {"exit_code": 0, "requests": [{"index": 0, "field": {"max_turns": 4}}]}
+    }
+  ]
+}

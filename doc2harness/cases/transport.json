@@ -1,0 +1,139 @@
+{
+  "category": "transport",
+  "about": "Section 5: which failures are retried, how often, and what the run reports.",
+  "cases": [
+    {
+      "name": "retry/server_error",
+      "why": "a 500 is retried and the run carries on",
+      "script": [
+        {"status": 500},
+        {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}
+      ],
+      "expect": {
+        "exit_code": 0,
+        "request_count": 2,
+        "stderr_has": ["retry: attempt 2 after status 500"],
+        "stdout_has": ["done: ok"]
+      }
+    },
+    {
+      "name": "retry/rate_limited",
+      "why": "a 429 is retried as well",
+      "script": [
+        {"status": 429},
+        {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}
+      ],
+      "expect": {
+        "exit_code": 0,
+        "request_count": 2,
+        "stderr_has": ["retry: attempt 2 after status 429"]
+      }
+    },
+    {
+      "name": "retry/same_turn",
+      "why": "a retry resends the same body: the turn counter does not move",
+      "script": [
+        {"status": 503},
+        {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}
+      ],
+      "expect": {
+        "exit_code": 0,
+        "request_count": 2,
+        "requests": [
+          {"index": 0, "field": {"turn": 1}},
+          {"index": 1, "field": {"turn": 1}}
+        ]
+      }
+    },
+    {
+      "name": "retry/exhausted",
+      "why": "three retries then give up with the transport exit code",
+      "script": [{"status": 500}, {"status": 500}, {"status": 500}, {"status": 500}],
+      "expect": {
+        "exit_code": 3,
+        "request_count": 4,
+        "stdout": [],
+        "stderr_has": [
+          "retry: attempt 2 after status 500",
+          "retry: attempt 3 after status 500",
+          "retry: attempt 4 after status 500",
+          "model error: status 500"
+        ]
+      }
+    },
+    {
+      "name": "retry/count_is_configurable",
+      "why": "--retries changes how many attempts there are",
+      "extra": ["--retries", "1"],
+      "script": [{"status": 503}, {"status": 503}],
+      "expect": {
+        "exit_code": 3,
+        "request_count": 2,
+        "stderr_has": ["retry: attempt 2 after status 503", "model error: status 503"],
+        "stderr_lacks": ["attempt 3"]
+      }
+    },
+    {
+      "name": "retry/none_requested",
+      "why": "--retries 0 means a single attempt",
+      "extra": ["--retries", "0"],
+      "script": [{"status": 500}, {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}],
+      "expect": {
+        "exit_code": 3,
+        "request_count": 1,
+        "stderr_lacks": ["retry:"],
+        "stderr_has": ["model error: status 500"]
+      }
+    },
+    {
+      "name": "error/not_found_is_not_retried",
+      "why": "a 404 is the harness's own fault and is not worth retrying",
+      "script": [{"status": 404}, {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}],
+      "expect": {
+        "exit_code": 3,
+        "request_count": 1,
+        "stderr_lacks": ["retry:"],
+        "stderr_has": ["model error: status 404"]
+      }
+    },
+    {
+      "name": "error/bad_request_is_not_retried",
+      "why": "a 400 is not retried either",
+      "script": [{"status": 400}, {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}],
+      "expect": {
+        "exit_code": 3,
+        "request_count": 1,
+        "stderr_lacks": ["retry:"],
+        "stderr_has": ["model error: status 400"]
+      }
+    },
+    {
+      "name": "error/unparseable_body",
+      "why": "a 200 that is not JSON is a transport failure, and is not retried",
+      "script": [{"raw": "not json at all"}, {"tool_calls": [{"id": "f", "name": "finish", "arguments": {"success": true, "summary": "ok"}}]}],
+      "expect": {
+        "exit_code": 3,
+        "request_count": 1,
+        "stdout": [],
+        "stderr_lacks": ["retry:"],
+        "stderr_has": ["model error: bad response"]
+      }
+    },
+    {
+      "name": "error/json_that_is_not_an_object",
+      "why": "a JSON array is not a response",
+      "script": [{"raw": "[1, 2, 3]"}],
+      "expect": {
+        "exit_code": 3,
+        "request_count": 1,
+        "stderr_has": ["model error: bad response"]
+      }
+    },
+    {
+      "name": "error/no_token_line",
+      "why": "a transport failure reports no token totals",
+      "script": [{"status": 400}],
+      "expect": {"exit_code": 3, "stdout": []}
+    }
+  ]
+}
